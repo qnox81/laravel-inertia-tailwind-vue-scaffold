@@ -65,7 +65,7 @@
             "@php laravel/artisan package:discover --ansi"
         ],
         "post-root-package-install": [
-            "@php -r \"file_exists('laravel/.env') || copy('laravel/.env.example', '.env');\""
+            "@php -r \"file_exists('laravel/.env') || copy('laravel/.env.example', '.env');\"",
             "@php -r \"file_exists('docker/.env') || copy('docker/.env.example', '.env');\""
         ],
         "post-create-project-cmd": [
