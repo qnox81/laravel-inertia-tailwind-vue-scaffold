@@ -1,0 +1,146 @@
+version: '3'
+
+networks:
+  app_backend:
+  macos_local:
+    external:
+      name: macos_local_default
+
+services:
+  nginx:
+    build:
+      context: ../
+      dockerfile: ./docker/nginx/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_nginx
+    networks:
+      - app_backend
+      - macos_local
+    ports:
+      - "${PORT_HTTP}:80"
+    restart: unless-stopped
+    environment:
+      - VIRTUAL_HOST=app.test
+      - VIRTUAL_PORT=${PORT_HTTP}
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.local_docker:${APP_CODE_PATH_CONTAINER}/.env
+
+  mysql:
+    image: mysql:8
+    container_name: ${COMPOSE_PROJECT_NAME}_mysql
+    networks:
+      - app_backend
+    ports:
+      - "${PORT_DB}:3306"
+    restart: unless-stopped
+    tty: true
+    environment:
+      MYSQL_DATABASE: app
+      MYSQL_USER: app
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ${DATA_PATH_HOST}/mysql:/var/lib/mysql
+      - ./mysql/app.cnf:/etc/mysql/conf.d/app.cnf
+
+  app:
+    image: ${COMPOSE_PROJECT_NAME}_app:local
+    build:
+      context: ../
+      dockerfile: ./docker/app/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_app
+    networks:
+      - app_backend
+    ports:
+      - "${PORT_PHP}:9000"
+    depends_on:
+      - mysql
+      - nginx
+    working_dir: /app
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.local_docker:${APP_CODE_PATH_CONTAINER}/.env
+      - ./app/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+      - ./app/laravel.ini:/usr/local/etc/php/conf.d/laravel.ini
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  redis:
+    image: redis:alpine
+    #    command: redis-server --requirepass sOmE_sEcUrE_pAsS
+    command: redis-server
+    container_name: ${COMPOSE_PROJECT_NAME}_redis
+    networks:
+      - app_backend
+    # ports:
+    #   - "6379:6379"
+    environment:
+      - REDIS_REPLICATION_MODE=master
+    volumes:
+      - ${DATA_PATH_HOST}/redis:/var/lib/redis
+    #      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+
+  composer:
+    build:
+      context: ../
+      dockerfile: ./docker/composer/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_composer
+    networks:
+      - app_backend
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.local_docker:${APP_CODE_PATH_CONTAINER}/.env
+    working_dir: /app
+    user: laravel
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+
+  #  npm:
+  #    image: node:13.7
+  #    container_name: ${COMPOSE_PROJECT_NAME}_npm
+  #    volumes:
+  #      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+  #    working_dir: /app
+  #    entrypoint: [ 'npm' ]
+
+  yarn:
+    image: node:15-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}_yarn
+    working_dir: /app
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.local_docker:${APP_CODE_PATH_CONTAINER}/.env
+    entrypoint: [ 'yarn' ]
+
+  artisan:
+    image: ${COMPOSE_PROJECT_NAME}_app:local
+    container_name: ${COMPOSE_PROJECT_NAME}_artisan
+    networks:
+      - app_backend
+    depends_on:
+      - mysql
+    working_dir: /app
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.local_docker:${APP_CODE_PATH_CONTAINER}/.env
+    user: laravel
+    entrypoint: [ 'php', '/app/artisan' ]
+
+  horizon:
+    build:
+      context: ../
+      dockerfile: ./docker/horizon/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_horizon
+    networks:
+      - app_backend
+    depends_on:
+      - mysql
+      - redis
+    working_dir: /app
+    volumes:
+      - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      - ${APP_CODE_PATH_HOST}/.env.docker:${APP_CODE_PATH_CONTAINER}/.env
+      - ./horizon/conf.d/:/etc/supervisor/conf.d/
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: laravel
+    entrypoint: [ '/usr/bin/supervisord', '-n', '-c',  '/etc/supervisor/supervisord.conf' ]

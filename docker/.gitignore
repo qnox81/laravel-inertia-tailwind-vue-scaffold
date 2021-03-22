@@ -1,0 +1,7 @@
+/_logs
+/_data
+/nginx/ssl/*.crt
+/nginx/ssl/*.key
+/nginx/ssl/*.csr
+.env
+.DS_Store
