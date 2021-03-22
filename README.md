@@ -11,7 +11,7 @@ Scaffold for new laravel projects. In a nut shell, it's a basic laravel app, wit
 ## Installing
 
 ```bash
-$ composer create-project --prefer-dist qnox81/laravel-scaffold app-name
+$ composer create-project --prefer-dist qnox81/laravel-inertia-tailwind-vue-scaffold app-name
 ```
 
 ## Packages
